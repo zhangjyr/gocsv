@@ -13,6 +13,8 @@ import (
 // --------------------------------------------------------------------------
 // Conversion interfaces
 
+type ctxKey string
+
 // TypeMarshaller is implemented by any value that has a MarshalCSV method
 // This converter is used to convert the value to it string representation
 type TypeMarshaller interface {

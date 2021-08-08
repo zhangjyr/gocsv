@@ -8,6 +8,7 @@ package gocsv
 
 import (
 	"bytes"
+	"context"
 	"encoding/csv"
 	"fmt"
 	"io"
@@ -191,9 +192,15 @@ func Unmarshal(in io.Reader, out interface{}) error {
 	return readTo(newSimpleDecoderFromReader(in), out)
 }
 
-// Unmarshal parses the CSV from the reader in the interface.
+// UnmarshalWithErrorHandler parses the CSV from the reader in the interface.
 func UnmarshalWithErrorHandler(in io.Reader, errHandle ErrorHandler, out interface{}) error {
 	return readToWithErrorHandler(newSimpleDecoderFromReader(in), errHandle, out)
+}
+
+// UnmarshalWithHeaders parses the CSV from the reader in the interface.
+func UnmarshalWithHeaders(in io.Reader, out interface{}, headers []string) error {
+	_, err := readToWithHeaders(context.Background(), newSimpleDecoderFromReader(in), nil, out, false, headers)
+	return err
 }
 
 // UnmarshalWithoutHeaders parses the CSV from the reader in the interface.
@@ -203,17 +210,28 @@ func UnmarshalWithoutHeaders(in io.Reader, out interface{}) error {
 
 // UnmarshalCSVWithoutHeaders parses a headerless CSV with passed in CSV reader
 func UnmarshalCSVWithoutHeaders(in CSVReader, out interface{}) error {
-	return readToWithoutHeaders(csvDecoder{in}, out)
+	return readToWithoutHeaders(NewSimpleDecoderFromCSVReader(in), out)
 }
 
 // UnmarshalDecoder parses the CSV from the decoder in the interface
-func UnmarshalDecoder(in Decoder, out interface{}) error {
-	return readTo(in, out)
+func UnmarshalDecoder(in SimpleDecoder, out interface{}, headers ...string) (context.Context, error) {
+	return readToWithHeaders(context.Background(), in, nil, out, true, headers)
+}
+
+// UnmarshalDecoderWithContext parses the CSV from the decoder in the interface
+func UnmarshalDecoderWithContext(ctx context.Context, in SimpleDecoder, out interface{}, headers ...string) (context.Context, error) {
+	return readToWithHeaders(ctx, in, nil, out, true, headers)
 }
 
 // UnmarshalCSV parses the CSV from the reader in the interface.
 func UnmarshalCSV(in CSVReader, out interface{}) error {
-	return readTo(csvDecoder{in}, out)
+	return readTo(NewSimpleDecoderFromCSVReader(in), out)
+}
+
+// UnmarshalCSVWithHeaders parses the CSV from the reader in the interface.
+func UnmarshalCSVWithHeaders(in CSVReader, out interface{}, headers []string) error {
+	_, err := readToWithHeaders(context.Background(), NewSimpleDecoderFromCSVReader(in), nil, out, false, headers)
+	return err
 }
 
 // UnmarshalCSVToMap parses a CSV of 2 columns into a map.
@@ -262,6 +280,15 @@ func UnmarshalToChan(in io.Reader, c interface{}) error {
 	return readEach(newSimpleDecoderFromReader(in), c)
 }
 
+// UnmarshalToChanWithHeaders parses the CSV from the reader and send each value in the chan c.
+// The channel must have a concrete type.
+func UnmarshalToChanWithHeaders(in io.Reader, c interface{}, headers []string) error {
+	if c == nil {
+		return fmt.Errorf("goscv: channel is %v", c)
+	}
+	return readEachWithHeaders(context.Background(), newSimpleDecoderFromReader(in), c, headers)
+}
+
 // UnmarshalToChanWithoutHeaders parses the CSV from the reader and send each value in the chan c.
 // The channel must have a concrete type.
 func UnmarshalToChanWithoutHeaders(in io.Reader, c interface{}) error {
@@ -295,6 +322,12 @@ func UnmarshalBytesToChan(in []byte, c interface{}) error {
 // UnmarshalToCallback parses the CSV from the reader and send each value to the given func f.
 // The func must look like func(Struct).
 func UnmarshalToCallback(in io.Reader, f interface{}) error {
+	return UnmarshalToCallbackWithHeaders(in, f, nil)
+}
+
+// UnmarshalToCallbackWithHeaders parses the CSV from the reader and send each value to the given func f.
+// The func must look like func(Struct).
+func UnmarshalToCallbackWithHeaders(in io.Reader, f interface{}, headers []string) error {
 	valueFunc := reflect.ValueOf(f)
 	t := reflect.TypeOf(f)
 	if t.NumIn() != 1 {
@@ -303,7 +336,7 @@ func UnmarshalToCallback(in io.Reader, f interface{}) error {
 	cerr := make(chan error)
 	c := reflect.MakeChan(reflect.ChanOf(reflect.BothDir, t.In(0)), 0)
 	go func() {
-		cerr <- UnmarshalToChan(in, c.Interface())
+		cerr <- UnmarshalToChanWithHeaders(in, c.Interface(), headers)
 	}()
 	for {
 		select {
@@ -377,7 +410,7 @@ func UnmarshalToCallbackWithError(in io.Reader, f interface{}) error {
 		return fmt.Errorf("the given function must have exactly one return value")
 	}
 	if !isErrorType(t.Out(0)) {
-		return fmt.Errorf("the given function must only return error.")
+		return fmt.Errorf("the given function must only return error")
 	}
 
 	cerr := make(chan error)
@@ -398,7 +431,7 @@ func UnmarshalToCallbackWithError(in io.Reader, f interface{}) error {
 		}
 		v, notClosed := c.Recv()
 		if !notClosed || v.Interface() == nil {
-			if err := <- cerr; err != nil {
+			if err := <-cerr; err != nil {
 				fErr = err
 			}
 			break

@@ -209,7 +209,7 @@ func Test_readTo_slice(t *testing.T) {
 [1, 2, 3]`)
 	reader := csv.NewReader(b)
 	reader.Comma = '\t'
-	d := csvDecoder{reader}
+	d := &csvDecoder{reader}
 	samples := []SliceSample{}
 	if err := readTo(d, &samples); err != nil {
 		t.Fatal(err)
@@ -565,7 +565,7 @@ baz,2,zap,4.00`)
 			wantFoo:  "bar",
 			wantBar:  1,
 			wantBaz:  "zip",
-			wantFrop: 314,
+			wantFrop: 3.14,
 		},
 		{
 			name:     "should validate index 1",
@@ -573,7 +573,7 @@ baz,2,zap,4.00`)
 			wantFoo:  "baz",
 			wantBar:  2,
 			wantBaz:  "zap",
-			wantFrop: 400,
+			wantFrop: 4.00,
 		},
 	}
 	for _, tt := range tests {

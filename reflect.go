@@ -37,8 +37,9 @@ func (f fieldInfo) matchesKey(key string) bool {
 }
 
 var structInfoCache sync.Map
-var structMap = make(map[reflect.Type]*structInfo)
-var structMapMutex sync.RWMutex
+
+// var structMap = make(map[reflect.Type]*structInfo)
+// var structMapMutex sync.RWMutex
 
 func getStructInfo(rType reflect.Type) *structInfo {
 	stInfo, ok := structInfoCache.Load(rType)
@@ -114,14 +115,14 @@ func getFieldInfos(rType reflect.Type, parentIndexChain []int) []fieldInfo {
 	return fieldsList
 }
 
-func getConcreteContainerInnerType(in reflect.Type) (inInnerWasPointer bool, inInnerType reflect.Type) {
-	inInnerType = in.Elem()
-	inInnerWasPointer = false
-	if inInnerType.Kind() == reflect.Ptr {
-		inInnerWasPointer = true
-		inInnerType = inInnerType.Elem()
+func getConcreteContainerUnitType(in reflect.Type, scalars ...bool) (bool, reflect.Type) {
+	if len(scalars) == 0 || !scalars[0] {
+		in = in.Elem()
 	}
-	return inInnerWasPointer, inInnerType
+	if in.Kind() == reflect.Ptr {
+		return true, in.Elem()
+	}
+	return false, in
 }
 
 func getConcreteReflectValueAndType(in interface{}) (reflect.Value, reflect.Type) {

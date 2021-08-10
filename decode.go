@@ -156,11 +156,11 @@ func readToWithHeaders(ctx context.Context, decoder SimpleDecoder, errHandler Er
 			outType = outValue.Type()
 		}
 	}
-	outInnerWasPointer, outInnerType := getConcreteContainerInnerType(outType) // Get the concrete inner type (not pointer) (Container<"?">)
-	if err := ensureOutInnerType(outInnerType); err != nil {
+	outUnitWasPointer, outUnitType := getConcreteContainerUnitType(outType, scalar) // Get the concrete inner type (not pointer) (Container<"?">)
+	if err := ensureOutInnerType(outUnitType); err != nil {
 		return ctx, err
-	} else if scalar && !outInnerWasPointer {
-		return ctx, fmt.Errorf("cannot use %v, require *%v", outInnerType, outInnerType)
+	} else if scalar && !outUnitWasPointer {
+		return ctx, fmt.Errorf("cannot use %v, require *%v", outUnitType, outUnitType)
 	}
 
 	csvHeadersLabels, ok := ctx.Value(ctxKeyHeaderLabels).(map[int]*fieldInfo)
@@ -173,7 +173,7 @@ func readToWithHeaders(ctx context.Context, decoder SimpleDecoder, errHandler Er
 			}
 		}
 
-		csvHeadersLabels, err = parseHeader(headers, outInnerType)
+		csvHeadersLabels, err = parseHeader(headers, outUnitType)
 		if err != nil {
 			return ctx, err
 		}
@@ -186,7 +186,7 @@ func readToWithHeaders(ctx context.Context, decoder SimpleDecoder, errHandler Er
 		if err != nil {
 			return ctx, err
 		}
-		return ctx, parse(0, csvRow, &outValue, outInnerWasPointer, csvHeadersLabels)
+		return ctx, parse(0, csvRow, &outValue, outUnitWasPointer, csvHeadersLabels)
 	} else {
 		csvRows, err := decoder.getCSVRows() // Get the CSV csvRows
 		if err != nil {
@@ -200,9 +200,9 @@ func readToWithHeaders(ctx context.Context, decoder SimpleDecoder, errHandler Er
 		}
 
 		for i, csvRow := range csvRows {
-			outInner := createNewOutInner(outInnerWasPointer, outInnerType)
-			parseError := parse(i+2, csvRow, &outInner, outInnerWasPointer, csvHeadersLabels)
-			if parseError != nil && (errHandler == nil || !errHandler(parseError)) {
+			outInner := createNewOutInner(outUnitWasPointer, outUnitType)
+			parseError := parse(i+2, csvRow, &outInner, outUnitWasPointer, csvHeadersLabels)
+			if parseError != nil && (errHandler == nil || !errHandler(parseError.(*csv.ParseError))) {
 				return ctx, parseError
 			}
 			outValue.Index(i).Set(outInner)
@@ -230,7 +230,7 @@ func readEachWithHeaders(ctx context.Context, decoder SimpleDecoder, c interface
 		}
 	}
 
-	outInnerWasPointer, outInnerType := getConcreteContainerInnerType(outType) // Get the concrete inner type (not pointer) (Container<"?">)
+	outInnerWasPointer, outInnerType := getConcreteContainerUnitType(outType) // Get the concrete inner type (not pointer) (Container<"?">)
 	if err := ensureOutInnerType(outInnerType); err != nil {
 		return err
 	}
@@ -272,7 +272,7 @@ func readEachWithoutHeaders(decoder SimpleDecoder, c interface{}) error {
 	}
 	defer outValue.Close()
 
-	outInnerWasPointer, outInnerType := getConcreteContainerInnerType(outType) // Get the concrete inner type (not pointer) (Container<"?">)
+	outInnerWasPointer, outInnerType := getConcreteContainerUnitType(outType) // Get the concrete inner type (not pointer) (Container<"?">)
 	if err := ensureOutInnerType(outInnerType); err != nil {
 		return err
 	}
@@ -311,7 +311,7 @@ func readToWithoutHeaders(decoder Decoder, out interface{}) error {
 	if err := ensureOutType(outType); err != nil {
 		return err
 	}
-	outInnerWasPointer, outInnerType := getConcreteContainerInnerType(outType) // Get the concrete inner type (not pointer) (Container<"?">)
+	outInnerWasPointer, outInnerType := getConcreteContainerUnitType(outType) // Get the concrete inner type (not pointer) (Container<"?">)
 	if err := ensureOutInnerType(outInnerType); err != nil {
 		return err
 	}
@@ -442,7 +442,7 @@ func parseHeader(headers []string, outInnerType reflect.Type) (map[int]*fieldInf
 	return csvHeadersLabels, nil
 }
 
-func parse(lineNo int, csvRow []string, outInner *reflect.Value, outInnerWasPointer bool, csvHeadersLabels map[int]*fieldInfo) *csv.ParseError {
+func parse(lineNo int, csvRow []string, outInner *reflect.Value, outInnerWasPointer bool, csvHeadersLabels map[int]*fieldInfo) error {
 	for j, csvColumnContent := range csvRow {
 		if fieldInfo, ok := csvHeadersLabels[j]; ok { // Position found accordingly to header name
 			value := csvColumnContent

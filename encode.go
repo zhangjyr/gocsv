@@ -10,9 +10,9 @@ type encoder struct {
 	out io.Writer
 }
 
-func newEncoder(out io.Writer) *encoder {
-	return &encoder{out}
-}
+// func newEncoder(out io.Writer) *encoder {
+// 	return &encoder{out}
+// }
 
 func writeFromChan(writer CSVWriter, c <-chan interface{}) error {
 	// Get the first value. It wil determine the header structure.
@@ -68,7 +68,7 @@ func writeTo(writer CSVWriter, in interface{}, omitHeaders bool) error {
 	if err := ensureInType(inType); err != nil {
 		return err
 	}
-	inInnerWasPointer, inInnerType := getConcreteContainerInnerType(inType) // Get the concrete inner type (not pointer) (Container<"?">)
+	inInnerWasPointer, inInnerType := getConcreteContainerUnitType(inType) // Get the concrete inner type (not pointer) (Container<"?">)
 	if err := ensureInInnerType(inInnerType); err != nil {
 		return err
 	}
